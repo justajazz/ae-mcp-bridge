@@ -11,6 +11,19 @@ ideas ported from [TheLlamainator/after-effects-mcp](https://github.com/TheLlama
 
 [Manual](docs/MANUAL.md) ([PDF](docs/pdf/MANUAL.pdf)) · [Tool reference](docs/TOOLS.md) ([PDF](docs/pdf/TOOLS.pdf)) · [Changelog](CHANGELOG.md)
 
+## Example
+
+> **You:** *"Create a 1080x1080 activity card with the step count and two labels. Animate its entrance in Apple style
+> and show me a storyboard."*
+>
+> **Assistant:** builds the composition and the layers, opens the rounded card through its Rectangle Size with an
+> overshoot, brings the texts in with text animators 4 frames apart, turns motion blur on, and checks the motion:
+
+![Storyboard made by ae_capture_frames: the card opens from a line, overshoots and settles, then the number and the labels appear inside it](docs/images/storyboard.png)
+
+One image, nine frames with time labels: the assistant sees the whole animation at once and catches what a single
+frame hides, such as text showing outside a card that is still opening, uneven timing or a missing overshoot.
+
 ## What it can do
 
 - **Build:** compositions, text / shape / solid / adjustment / null layers, transforms, parenting, track mattes,
@@ -44,6 +57,8 @@ prompt, one AE preference, starting the panel and restarting apps. See [INSTALL-
    node C:\MCP\ae-mcp\src\install-panel.mjs --link
    ```
 4. Open **Window > ae-mcp-panel.jsx**, click **Start bridge**, tick *Start automatically*.
+
+   <img src="docs/images/panel.png" width="280" alt="The ae-mcp-panel docked in After Effects with the bridge running">
 5. Connect your client, e.g. Claude Code:
    ```bash
    claude mcp add --scope project after-effects -- node "C:\MCP\ae-mcp\src\mcp-server.mjs"
@@ -54,9 +69,7 @@ prompt, one AE preference, starting the panel and restarting apps. See [INSTALL-
 
 ## How it works
 
-```
-AI client --MCP stdio--> src/mcp-server.mjs --files--> bridge folder <--polls-- src/ae-mcp-panel.jsx (in AE)
-```
+![How the bridge works: AI client, MCP server, bridge folder, panel inside After Effects](docs/images/architecture.svg)
 
 The server is plain Node.js with no packages. The panel inside After Effects executes ExtendScript templates sent by
 the server; user data travels separately from code. Requests are synchronous with unique ids, long commands can be
