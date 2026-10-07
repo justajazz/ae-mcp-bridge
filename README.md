@@ -9,7 +9,7 @@ Inspired by **"After Effects MCP by Ruslan Tsapenko"** (v0.1.0) from
 [Ruslan Tsapenko](https://www.youtube.com/@RuslanTsapenko) ([tsapenko.com](https://tsapenko.com/)), with tools and
 ideas ported from [TheLlamainator/after-effects-mcp](https://github.com/TheLlamainator/after-effects-mcp) (MIT).
 
-[Manual](docs/MANUAL.md) · [Tool reference](docs/TOOLS.md) · [Changelog](CHANGELOG.md)
+[Manual](docs/MANUAL.md) ([PDF](docs/pdf/MANUAL.pdf)) · [Tool reference](docs/TOOLS.md) ([PDF](docs/pdf/TOOLS.pdf)) · [Changelog](CHANGELOG.md)
 
 ## What it can do
 
