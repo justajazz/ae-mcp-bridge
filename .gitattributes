@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.md text eol=lf
+*.txt text eol=crlf
+*.aep binary
+*.ffx binary
+*.png binary
+*.wav binary
+*.zip binary

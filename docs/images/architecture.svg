@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" width="1000" height="300" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <rect width="1000" height="300" fill="#ffffff"/>
+
+  <!-- AI client -->
+  <rect x="20" y="60" width="200" height="170" rx="12" fill="#F4F1EA" stroke="#C9C2B3" stroke-width="1.5"/>
+  <text x="120" y="92" text-anchor="middle" font-size="17" font-weight="700" fill="#222">AI client</text>
+  <text x="120" y="128" text-anchor="middle" font-size="14" fill="#333">Claude Code</text>
+  <text x="120" y="152" text-anchor="middle" font-size="14" fill="#333">Claude Desktop · Cowork</text>
+  <text x="120" y="176" text-anchor="middle" font-size="14" fill="#333">Codex</text>
+  <text x="120" y="210" text-anchor="middle" font-size="12" fill="#777">asks, looks, fixes</text>
+
+  <!-- MCP server -->
+  <rect x="290" y="60" width="210" height="170" rx="12" fill="#EAF2FF" stroke="#8DB3F2" stroke-width="1.5"/>
+  <text x="395" y="92" text-anchor="middle" font-size="17" font-weight="700" fill="#222">MCP server</text>
+  <text x="395" y="118" text-anchor="middle" font-size="13" fill="#1d4f9a" font-family="Consolas, monospace">src/mcp-server.mjs</text>
+  <text x="395" y="144" text-anchor="middle" font-size="13" fill="#333">Node.js, no dependencies</text>
+  <text x="395" y="166" text-anchor="middle" font-size="13" fill="#333">34 tools (JSX templates)</text>
+  <text x="395" y="188" text-anchor="middle" font-size="13" fill="#333">frames, storyboards, WAV</text>
+  <text x="395" y="210" text-anchor="middle" font-size="13" fill="#333">backups, script log</text>
+
+  <!-- Bridge folder -->
+  <rect x="570" y="60" width="180" height="170" rx="12" fill="#FFF6E0" stroke="#E6C26A" stroke-width="1.5"/>
+  <text x="660" y="92" text-anchor="middle" font-size="17" font-weight="700" fill="#222">Bridge folder</text>
+  <text x="660" y="118" text-anchor="middle" font-size="13" fill="#8a5a00" font-family="Consolas, monospace">C:\MCP\ae-bridge</text>
+  <text x="660" y="144" text-anchor="middle" font-size="13" fill="#333">command.json · ack.json</text>
+  <text x="660" y="166" text-anchor="middle" font-size="13" fill="#333">results/ · frames/</text>
+  <text x="660" y="188" text-anchor="middle" font-size="13" fill="#333">backups/ · logs/</text>
+  <text x="660" y="210" text-anchor="middle" font-size="13" fill="#333">renders/</text>
+
+  <!-- After Effects -->
+  <rect x="810" y="30" width="172" height="230" rx="12" fill="#1F1F3A" stroke="#9999FF" stroke-width="2"/>
+  <text x="896" y="58" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">After Effects</text>
+  <rect x="826" y="74" width="140" height="72" rx="8" fill="#2E2E58" stroke="#9999FF"/>
+  <text x="896" y="100" text-anchor="middle" font-size="12.5" fill="#ffffff" font-family="Consolas, monospace">ae-mcp-panel.jsx</text>
+  <text x="896" y="122" text-anchor="middle" font-size="12.5" fill="#d6d6ff">runs the code,</text>
+  <text x="896" y="138" text-anchor="middle" font-size="12.5" fill="#d6d6ff">one undo step</text>
+  <rect x="826" y="176" width="140" height="66" rx="8" fill="#2E2E58" stroke="#9999FF"/>
+  <text x="896" y="202" text-anchor="middle" font-size="13" fill="#ffffff">your project</text>
+  <text x="896" y="222" text-anchor="middle" font-size="12" fill="#d6d6ff">layers, keys, effects</text>
+  <line x1="896" y1="146" x2="896" y2="174" stroke="#9999FF" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- arrows -->
+  <line x1="222" y1="122" x2="286" y2="122" stroke="#555" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="288" y1="168" x2="224" y2="168" stroke="#555" stroke-width="2" marker-end="url(#a)"/>
+  <text x="255" y="112" text-anchor="middle" font-size="12" fill="#555">tool call</text>
+  <text x="255" y="188" text-anchor="middle" font-size="12" fill="#555">result</text>
+  <text x="255" y="258" text-anchor="middle" font-size="12" fill="#888">MCP over stdio</text>
+
+  <line x1="502" y1="122" x2="566" y2="122" stroke="#555" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="568" y1="168" x2="504" y2="168" stroke="#555" stroke-width="2" marker-end="url(#a)"/>
+  <text x="535" y="112" text-anchor="middle" font-size="12" fill="#555">command</text>
+  <text x="535" y="188" text-anchor="middle" font-size="12" fill="#555">result</text>
+  <text x="535" y="258" text-anchor="middle" font-size="12" fill="#888">files, unique id</text>
+
+  <line x1="752" y1="110" x2="822" y2="110" stroke="#555" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="786" y="98" text-anchor="middle" font-size="12" fill="#555">polls</text>
+  <text x="786" y="130" text-anchor="middle" font-size="12" fill="#555">10× / s</text>
+</svg>

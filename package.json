@@ -1,0 +1,20 @@
+{
+  "name": "ae-mcp-bridge",
+  "version": "0.2.0",
+  "description": "MCP bridge that lets Claude and Codex work inside Adobe After Effects",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": "Claude Code & Yuriy Martyniuk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justajazz/ae-mcp-bridge.git"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node src/mcp-server.mjs",
+    "test": "node scripts/run-tests.mjs"
+  }
+}

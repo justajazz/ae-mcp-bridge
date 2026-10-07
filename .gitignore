@@ -1,0 +1,9 @@
+node_modules/
+.mcp.json
+.claude/
+docs/pdf/
+Claude outputs/
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store
