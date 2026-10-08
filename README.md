@@ -1,5 +1,7 @@
 # AE MCP Bridge
 
+<img src="docs/media/promo.webp" width="100%" alt="AE MCP Bridge: one sentence in a chat, a finished and fixable After Effects project out">
+
 **Let Claude (or Codex) work inside Adobe After Effects:** build compositions, shapes, text, effects and animation,
 look at the result as frames or a storyboard, and fix it, while you keep a normal, fully editable AE project.
 
