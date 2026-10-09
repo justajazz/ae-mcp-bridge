@@ -1,6 +1,6 @@
 # Tool reference
 
-AE MCP Bridge 0.2.0: 34 tools. Generated from `src/mcp-server.mjs` by `scripts/gen-tools-doc.mjs`; do not edit by hand.
+AE MCP Bridge 0.3.0: 34 tools. Generated from `src/mcp-server.mjs` by `scripts/gen-tools-doc.mjs`; do not edit by hand.
 
 Common conventions:
 
@@ -26,7 +26,7 @@ Common conventions:
 
 ### ae_health
 
-Check the After Effects bridge: server and panel versions, AE version, open project, active composition, panel status. Changes nothing.
+Check the After Effects bridge: server and runner versions, whether After Effects is running or shows a dialog, AE version, open project, active composition. Changes nothing.
 
 No parameters.
 

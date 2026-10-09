@@ -13,7 +13,7 @@ let dir, client, panel;
 
 async function setup(handler, env = {}) {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "ae mcp tools "));
-  client = new McpClient({ AE_MCP_BRIDGE_DIR: dir, AE_MCP_TIMEOUT_MS: "3000", AE_MCP_PICKUP_TIMEOUT_MS: "1000", AE_MCP_POLL_MS: "20", AE_MCP_BACKUP: "0", ...env });
+  client = new McpClient({ AE_MCP_BRIDGE_DIR: dir, AE_MCP_TIMEOUT_MS: "3000", AE_MCP_PICKUP_TIMEOUT_MS: "1000", AE_MCP_POLL_MS: "20", AE_MCP_BACKUP: "0", AE_MCP_TRANSPORT: "files", ...env });
   await client.initialize();
   panel = new MockPanel(dir, { handler });
   await panel.start();

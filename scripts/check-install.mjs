@@ -47,12 +47,12 @@ try {
   if (report.server.cloudSyncWarning) console.log(`WARNING:     ${report.server.cloudSyncWarning}`);
   if (report.connected) {
     const project = report.ae.project?.path ?? "(unsaved or no project)";
-    console.log(`after effects: ${report.ae.version}, panel ${report.ae.panelVersion}, project ${project}`);
+    console.log(`after effects: ${report.ae.version}, runner ${report.ae.runnerVersion}, project ${project}`);
     if (report.warning) console.log(`WARNING:     ${report.warning}`);
     console.log("RESULT:      connected");
     ok = true;
   } else {
-    console.log(`panel:       ${report.panel ? JSON.stringify(report.panel) : "never started in this bridge folder"}`);
+    console.log(`after effects: ${report.afterEffects ? JSON.stringify(report.afterEffects) : "unknown"}`);
     console.log(`RESULT:      not connected: ${report.error ?? report.message}`);
   }
 } catch (error) {

@@ -1,4 +1,4 @@
-// Static checks of the ExtendScript side + the panel's serializer run in a Node VM.
+// Static checks of the ExtendScript side + the runner's serializer run in a Node VM.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -9,6 +9,7 @@ import { JSX, LIB } from "../src/jsx.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const panelSource = fs.readFileSync(path.join(root, "src", "ae-mcp-panel.jsx"), "utf8");
+const runnerSource = fs.readFileSync(path.join(root, "src", "ae-mcp-runner.jsx"), "utf8");
 
 // ExtendScript is ES3: these constructs throw a syntax error or do not exist in AE.
 const ES5_PLUS = [
@@ -31,8 +32,15 @@ function assertEs3(source, label) {
   assert.doesNotThrow(() => new Function(code), `${label}: syntax error`);
 }
 
-test("panel is valid ES3", () => {
+test("runner and panel are valid ES3", () => {
+  assertEs3(runnerSource, "ae-mcp-runner.jsx");
   assertEs3(panelSource, "ae-mcp-panel.jsx");
+});
+
+test("nothing schedules tasks in AE (scheduleTask breaks when a modal dialog opens)", () => {
+  for (const [name, source] of [["runner", runnerSource], ["panel", panelSource]]) {
+    assert.ok(!/app\.scheduleTask\(/.test(stripComments(source)), name);
+  }
 });
 
 test("JSX templates and lib are valid ES3", () => {
@@ -41,18 +49,20 @@ test("JSX templates and lib are valid ES3", () => {
   for (const [name, code] of Object.entries(JSX)) assertEs3(LIB + " " + code, `template ${name}`);
 });
 
-test("panel and templates are pure ASCII (ExtendScript may not read UTF-8)", () => {
+test("runner, panel and templates are pure ASCII (ExtendScript may not read UTF-8)", () => {
   assert.match(panelSource, /^[\x00-\x7f]*$/);
+  assert.match(runnerSource, /^[\x00-\x7f]*$/);
   for (const [name, code] of Object.entries(JSX)) assert.match(code, /^[\x00-\x7f]*$/, name);
   assert.match(LIB, /^[\x00-\x7f]*$/);
 });
 
-test("panel credits Ruslan Tsapenko as the inspiration", () => {
+test("runner and panel credit Ruslan Tsapenko as the inspiration", () => {
   assert.match(panelSource, /Ruslan Tsapenko/);
+  assert.match(runnerSource, /Ruslan Tsapenko/);
 });
 
 function loadSerializer() {
-  const match = panelSource.match(/\/\/ @@serializer-begin([\s\S]*?)\/\/ @@serializer-end/);
+  const match = runnerSource.match(/\/\/ @@serializer-begin([\s\S]*?)\/\/ @@serializer-end/);
   assert.ok(match, "serializer markers present");
   const context = vm.createContext({});
   vm.runInContext(match[1], context);

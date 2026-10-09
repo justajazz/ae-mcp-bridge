@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AE MCP Bridge v0.2.0 — MCP stdio server for Adobe After Effects.
+// AE MCP Bridge v0.3.0 — MCP stdio server for Adobe After Effects.
 //
 // Inspired by "After Effects MCP by Ruslan Tsapenko" v0.1.0
 //   YouTube: https://www.youtube.com/@RuslanTsapenko  Site: https://tsapenko.com/
@@ -7,8 +7,9 @@
 // Made by Claude Code & Yuriy Martyniuk. MIT License, see LICENSE.
 //
 // Zero dependencies, no build step: `node mcp-server.mjs`.
-// Talks to ae-mcp-panel.jsx through files in the bridge folder (see the panel header).
-// Tools are JSX templates evaluated by the panel; user data is passed separately as `args`.
+// Talks to After Effects through files in the bridge folder (see the header of ae-mcp-runner.jsx):
+// writes command.json, then starts <bridge>/runner.jsx in the running AE (ae-launch.mjs), no polling.
+// Tools are JSX templates evaluated by the runner; user data is passed separately as `args`.
 
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -16,17 +17,18 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import crypto from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { JSX, withLib } from "./jsx.mjs";
+import { Launcher, readRunnerSource } from "./ae-launch.mjs";
 import { analyzeWav, contactSheet, decodePng, defaultPresetRoots, findPresets, flattenPng, parseColor, toRgb8 } from "./media.mjs";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // ---- configuration -----------------------------------------------------------
 
-// Must match resolveBridgeDir() in ae-mcp-panel.jsx.
+// Must match resolveBridgeDir() in ae-mcp-runner.jsx and ae-mcp-panel.jsx.
 export function defaultBridgeDir(platform = process.platform, home = os.homedir()) {
   if (platform === "win32") return "C:\\MCP\\ae-bridge";
   if (platform === "darwin") return path.posix.join(home, "Library", "Application Support", "ae-mcp-bridge");
@@ -57,6 +59,14 @@ export function loadConfig(env = process.env) {
     timeoutMs: number(env.AE_MCP_TIMEOUT_MS, 30000),
     pickupTimeoutMs: number(env.AE_MCP_PICKUP_TIMEOUT_MS, 10000),
     pollMs: number(env.AE_MCP_POLL_MS, 50),
+    // "cli": start the runner in AE for every command (default). "files": only write command.json and wait
+    // for something else to run it (tests, custom runners).
+    transport: env.AE_MCP_TRANSPORT === "files" ? "files" : "cli",
+    afterFx: env.AE_MCP_AFTERFX || "",
+    // How long a command waits for the user to close a modal dialog in AE before it gives up.
+    dialogWaitMs: number(env.AE_MCP_DIALOG_WAIT_MS, 60000),
+    // Re-send the trigger if AE has not started the command after this long (a dialog swallowed it).
+    retriggerMs: number(env.AE_MCP_RETRIGGER_MS, 4000),
     runJsxEnabled: !truthy(env.AE_MCP_DISABLE_RUN_JSX),
     backupEnabled: env.AE_MCP_BACKUP === undefined ? true : truthy(env.AE_MCP_BACKUP),
     backupKeep: Math.max(1, number(env.AE_MCP_BACKUP_KEEP, 5)),
@@ -68,7 +78,7 @@ export function loadConfig(env = process.env) {
 
 // ---- file helpers ------------------------------------------------------------
 
-// Windows: rename/unlink over a file another process (the panel, antivirus) holds open
+// Windows: rename/unlink over a file another process (After Effects, antivirus) holds open
 // fails with EPERM/EBUSY/EACCES for a few milliseconds. Retry instead of failing.
 const RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES", "EMFILE", "ENFILE", "ENOTEMPTY"]);
 
@@ -104,7 +114,7 @@ export async function readJson(file) {
   }
 }
 
-// JSON with every non-ASCII character escaped, so the panel decodes it correctly
+// JSON with every non-ASCII character escaped, so the runner decodes it correctly
 // whatever encoding ExtendScript assumes for the file (Cyrillic paths and names).
 export function asciiJson(value) {
   return JSON.stringify(value).replace(/[\u007f-\uffff]/g, ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"));
@@ -162,14 +172,16 @@ const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export class BridgeError extends Error {}
 
 export class Bridge {
-  constructor(config) {
+  constructor(config, launcher = null) {
     this.config = config;
+    this.launcher = config.transport === "cli" ? (launcher ?? new Launcher({ afterFx: config.afterFx })) : null;
     const dir = config.bridgeDir;
     this.paths = {
       dir,
       command: path.join(dir, "command.json"),
       ack: path.join(dir, "ack.json"),
-      status: path.join(dir, "panel-status.json"),
+      status: path.join(dir, "runner-status.json"),
+      runner: path.join(dir, "runner.jsx"),
       results: path.join(dir, "results"),
       frames: path.join(dir, "frames"),
       logs: path.join(dir, "logs")
@@ -192,20 +204,84 @@ export class Bridge {
     await removeOlderThan(this.paths.frames, 10 * 60 * 1000);
     await removeOlderThan(this.paths.dir, 10 * 60 * 1000, name => name.endsWith(".tmp"));
     await removeOlderThan(this.paths.logs, this.config.logRetentionDays * 24 * 60 * 60 * 1000);
+    if (this.launcher) await this.installRunner();
   }
 
-  readPanelStatus() {
+  // The runner AE executes is a copy in the bridge folder, so it always matches this server version.
+  async installRunner() {
+    const source = readRunnerSource();
+    let current = null;
+    try { current = await fs.readFile(this.paths.runner); } catch { /* missing */ }
+    if (!current || !current.equals(source)) await writeFileAtomic(this.paths.runner, source.toString("latin1"));
+  }
+
+  async probe() {
+    try { return await this.launcher.probe(); }
+    catch (error) { return { running: null, error: error.message }; }
+  }
+
+  // Waits until After Effects can take a script: running, and no modal dialog open. Returns the probe state.
+  async waitForAe(entry) {
+    const deadline = Date.now() + this.config.dialogWaitMs;
+    let logged = false;
+    for (;;) {
+      const state = await this.probe();
+      if (state.running === false) {
+        throw new BridgeError(state.unsupported
+          ? `Starting scripts in After Effects is not supported on ${process.platform}. Nothing was executed.`
+          : "After Effects is not running. Start it (and open the project), then call the tool again. Nothing was executed.");
+      }
+      if (!state.modal) return state;
+      const titles = state.dialogs?.length ? ` (${state.dialogs.map(t => `"${t}"`).join(", ")})` : "";
+      if (!logged) {
+        logged = true;
+        await this.log({ event: "waiting-for-dialog", commandId: entry?.commandId, dialogs: state.dialogs });
+        process.stderr.write(`ae-mcp: a dialog is open in After Effects${titles}; waiting up to ${this.config.dialogWaitMs} ms\n`);
+      }
+      if (Date.now() >= deadline) {
+        throw new BridgeError(`A dialog is open in After Effects${titles} and was not closed within ${this.config.dialogWaitMs} ms. ` +
+          "Ask the user to close it, then call the tool again. Nothing was executed.");
+      }
+      await sleep(300);
+    }
+  }
+
+  // Starts the runner for entry; first waits for AE to be ready. Rewrites command.json with a fresh
+  // pickup deadline when waiting for a dialog took time.
+  async trigger(entry, command) {
+    const state = await this.waitForAe(entry);
+    if (Date.now() + this.config.pickupTimeoutMs > entry.pickupDeadline) {
+      entry.pickupDeadline = command.pickupDeadline = Date.now() + this.config.pickupTimeoutMs;
+      await writeFileAtomic(this.paths.command, asciiJson(command));
+    }
+    if (!fsSync.existsSync(this.paths.runner)) await this.installRunner();
+    try {
+      await this.launcher.trigger(this.paths.runner, state);
+    } catch (error) {
+      throw new BridgeError(`Cannot start the script in After Effects: ${error.message}. Nothing was executed.`);
+    }
+    entry.triggeredAt = Date.now();
+    entry.triggers = (entry.triggers ?? 0) + 1;
+  }
+
+  readRunnerStatus() {
     return readJson(this.paths.status);
   }
 
-  // The command the panel is executing right now, or null.
+  // The command After Effects is executing right now, or null.
   async busyState() {
     const ack = await readJson(this.paths.ack);
     if (!ack || !ack.commandId) return null;
     if (fsSync.existsSync(this.resultFile(ack.commandId))) return null;
-    const status = await this.readPanelStatus();
-    // A heartbeat newer than the ack means the panel restarted and the ack is stale.
-    if (status && status.heartbeat > ack.startedAt) return null;
+    if (this.launcher) {
+      // AE quit or restarted since the ack was written: the command died with it.
+      const state = await this.probe();
+      if (state.running === false || (state.startTime && state.startTime > ack.startedAt)) return null;
+      return ack;
+    }
+    const status = await this.readRunnerStatus();
+    // A status newer than the ack means the runner restarted and the ack is stale.
+    if (status && (status.heartbeat ?? status.lastRunAt) > ack.startedAt) return null;
     return ack;
   }
 
@@ -222,7 +298,7 @@ export class Bridge {
   async ensureBackup() {
     const { backupEnabled, backupDir, backupKeep } = this.config;
     if (!backupEnabled) return null;
-    const status = await this.readPanelStatus();
+    const status = await this.readRunnerStatus();
     const projectPath = status?.projectPath ?? this.lastProjectPath;
     if (!projectPath) return null;
     const key = path.resolve(projectPath).toLowerCase();
@@ -260,16 +336,20 @@ export class Bridge {
       commandId, tool, code, args, undo, undoName: `MCP: ${tool}`,
       createdAt, pickupDeadline: createdAt + this.config.pickupTimeoutMs
     };
-    const entry = { commandId, tool, createdAt, pickupDeadline: command.pickupDeadline, picked: false, ...meta };
+    const entry = { commandId, tool, createdAt, pickupDeadline: command.pickupDeadline, picked: false, command, ...meta };
     this.pending.set(commandId, entry);
     await this.log({ event: "command", commandId, tool, args, code: meta.logCode });
     await writeFileAtomic(this.paths.command, asciiJson(command));
+    if (this.launcher) {
+      try { await this.trigger(entry, command); }
+      catch (error) { if (await this.withdraw(entry)) throw error; }
+    }
     const envelope = await this.waitFor(entry, timeoutMs ?? this.config.timeoutMs);
     return { entry, envelope };
   }
 
   // Polls for the result. Returns the envelope, or null when waitMs elapses while the
-  // command is still running. Throws if the panel never picked the command up.
+  // command is still running. Throws if After Effects never started the command.
   async waitFor(entry, waitMs) {
     const deadline = Date.now() + waitMs;
     for (;;) {
@@ -279,8 +359,14 @@ export class Bridge {
         const ack = await readJson(this.paths.ack);
         if (ack && ack.commandId === entry.commandId) {
           entry.picked = true;
+        } else if (this.launcher && entry.command && Date.now() - entry.triggeredAt >= this.config.retriggerMs) {
+          // Not started yet: a dialog may have swallowed the trigger. Wait for AE, then send it again
+          // (the runner executes each commandId once, so a duplicate trigger is harmless).
+          try { await this.trigger(entry, entry.command); }
+          catch (error) { if (await this.withdraw(entry)) throw error; }
+          continue;
         } else if (Date.now() > entry.pickupDeadline) {
-          if (await this.withdraw(entry)) throw new BridgeError(await this.notRespondingMessage());
+          if (await this.withdraw(entry)) throw new BridgeError(await this.notRespondingMessage(entry));
           continue;
         }
       }
@@ -289,7 +375,7 @@ export class Bridge {
     }
   }
 
-  // Removes a command the panel did not pick up in time. False if it started after all.
+  // Removes a command After Effects did not start in time. False if it started after all.
   async withdraw(entry) {
     const command = await readJson(this.paths.command);
     if (command && command.commandId === entry.commandId) {
@@ -311,22 +397,32 @@ export class Bridge {
     const envelope = await readJson(file);
     if (!envelope) return null;
     await withRetry(() => fs.rm(file, { force: true }));
-    // Do not leave a finished command behind: a restarted panel would see it as new (and report it expired).
+    // Do not leave a finished command behind: a later run would see it as new (and report it expired).
     const command = await readJson(this.paths.command);
     if (command && command.commandId === commandId) await withRetry(() => fs.rm(this.paths.command, { force: true })).catch(() => {});
     if (envelope.project !== undefined) this.lastProjectPath = envelope.project;
     return envelope;
   }
 
-  async notRespondingMessage() {
-    const status = await this.readPanelStatus();
+  async notRespondingMessage(entry) {
+    if (this.launcher) {
+      const state = await this.probe();
+      if (state.running === false) return "After Effects quit before running the command. Nothing was executed.";
+      if (state.modal) return "A dialog opened in After Effects before the command could start; close it and call the tool again. Nothing was executed.";
+      const status = await this.readRunnerStatus();
+      const ran = status?.lastRunAt ? `The runner last ran ${Math.round((Date.now() - status.lastRunAt) / 1000)}s ago.` : "The runner has never run in this bridge folder.";
+      return `After Effects did not start the command within ${this.config.pickupTimeoutMs} ms (${entry?.triggers ?? 0} triggers sent). ${ran} ` +
+        "AE may be busy (rendering, loading a project), or scripting is blocked: check Preferences > Scripting & Expressions > " +
+        `Allow Scripts to Write Files and Access Network. Nothing was executed. Bridge folder: ${this.paths.dir}.`;
+    }
+    const status = await this.readRunnerStatus();
     const where = `Bridge folder: ${this.paths.dir}.`;
-    const fix = "In After Effects open Window > ae-mcp-panel.jsx (or File > Scripts > Run Script File) and click Start bridge.";
-    if (!status) return `After Effects bridge panel has never run in this bridge folder. ${fix} ${where} Nothing was executed.`;
-    if (!status.running) return `After Effects bridge panel is stopped. ${fix} Nothing was executed.`;
-    const age = Math.round((Date.now() - status.heartbeat) / 1000);
-    return `After Effects did not pick up the command within ${this.config.pickupTimeoutMs} ms ` +
-      `(last panel heartbeat ${age}s ago). AE may be busy (rendering, a modal dialog is open) or the panel was closed. ` +
+    // Transport "files": an external runner polls the bridge folder.
+    if (!status) return `No runner has ever answered in this bridge folder (AE_MCP_TRANSPORT=files). ${where} Nothing was executed.`;
+    if (status.running === false) return `The bridge runner is stopped (AE_MCP_TRANSPORT=files). Nothing was executed.`;
+    const age = Math.round((Date.now() - (status.heartbeat ?? status.lastRunAt)) / 1000);
+    return `The command was not picked up within ${this.config.pickupTimeoutMs} ms ` +
+      `(last runner heartbeat ${age}s ago). ` +
       `Nothing was executed. ${where}`;
   }
 }
@@ -378,7 +474,7 @@ function templateTool(name, description, properties, { code, mutating = false, r
 export const TOOLS = [
   {
     name: "ae_health",
-    description: "Check the After Effects bridge: server and panel versions, AE version, open project, active composition, panel status. Changes nothing.",
+    description: "Check the After Effects bridge: server and runner versions, whether After Effects is running or shows a dialog, AE version, open project, active composition. Changes nothing.",
     inputSchema: { type: "object", properties: {} },
     run: health
   },
@@ -927,7 +1023,7 @@ async function checkEnvelope(bridge, entry, envelope) {
     event: "result", commandId: entry.commandId, tool: entry.tool, ok: Boolean(envelope.ok),
     ms: (envelope.finishedAt ?? Date.now()) - (envelope.startedAt ?? entry.createdAt), error: envelope.error
   });
-  if (envelope.expired) throw new BridgeError(`Command ${entry.commandId} expired before the panel picked it up; it was not executed.`);
+  if (envelope.expired) throw new BridgeError(`Command ${entry.commandId} expired before After Effects started it; it was not executed.`);
   if (!envelope.ok) {
     const line = envelope.errorLine ? ` (line ${envelope.errorLine})` : "";
     throw new BridgeError(`${entry.tool} failed in After Effects: ${envelope.error}${line}`);
@@ -1027,13 +1123,24 @@ async function health(bridge) {
     node: process.version,
     platform: process.platform
   };
-  const panelStatus = await bridge.readPanelStatus();
-  const panel = panelStatus && {
-    running: panelStatus.running,
-    panelVersion: panelStatus.panelVersion,
-    lastHeartbeatSecondsAgo: Math.round((Date.now() - panelStatus.heartbeat) / 1000)
+  server.transport = config.transport;
+  const runnerStatus = await bridge.readRunnerStatus();
+  const runner = runnerStatus && {
+    runnerVersion: runnerStatus.runnerVersion ?? runnerStatus.panelVersion,
+    lastRunSecondsAgo: Math.round((Date.now() - (runnerStatus.lastRunAt ?? runnerStatus.heartbeat)) / 1000)
   };
-  const report = { connected: false, server, panel };
+  const report = { connected: false, server, runner };
+  if (bridge.launcher) {
+    const state = await bridge.probe();
+    report.afterEffects = { running: state.running, modalDialog: state.modal ?? null, dialogs: state.dialogs, exe: state.exe };
+    if (state.error) report.afterEffects.probeError = state.error;
+    if (state.running === false || state.modal) {
+      report.message = state.modal
+        ? "A dialog is open in After Effects; commands wait until the user closes it."
+        : "After Effects is not running.";
+      return { content: [{ type: "text", text: jsonText(report) }], isError: true };
+    }
+  }
 
   const busy = await bridge.busyState();
   if (busy) {
@@ -1044,15 +1151,16 @@ async function health(bridge) {
   try {
     const { entry, envelope } = await bridge.dispatch("ae_health", { code: JSX.health, timeoutMs: 10000 });
     if (!envelope) {
-      report.message = "Panel picked up the health check but did not answer within 10 s (AE busy?).";
+      report.message = "After Effects started the health check but did not answer within 10 s (AE busy?).";
       report.commandId = entry.commandId;
     } else {
       bridge.pending.delete(entry.commandId);
       if (!envelope.ok) throw new BridgeError(envelope.error);
       report.connected = true;
       report.ae = envelope.data;
-      if (envelope.data.panelVersion !== VERSION) {
-        report.warning = `Version mismatch: server ${VERSION}, panel ${envelope.data.panelVersion}. Reinstall the panel.`;
+      const runnerVersion = envelope.data.runnerVersion ?? envelope.data.panelVersion;
+      if (runnerVersion !== VERSION) {
+        report.warning = `Version mismatch: server ${VERSION}, runner ${runnerVersion}. Restart the MCP server so it reinstalls <bridge>/runner.jsx.`;
       }
     }
   } catch (error) {
@@ -1121,7 +1229,7 @@ Technical notes
 - Pass user data through args; every tool call is one undo step; if a call returns status "running", use ae_get_result.
 - Show results to the user with ae_render_preview (MP4) when they want to watch the motion.`;
 
-const INSTRUCTIONS = "Controls Adobe After Effects through a panel running inside AE. Loop: ae_health -> ae_list_project " +
+const INSTRUCTIONS = "Controls Adobe After Effects by running scripts in the open AE (no panel needed). If a dialog is open in AE, calls wait for the user to close it. Loop: ae_health -> ae_list_project " +
   "(or ae_get_selection when the user points at something) -> build with the ae_* tools or ae_run_jsx (ExtendScript ES3) -> " +
   "check a still with ae_capture_frame and MOTION with ae_capture_frames -> fix. Each tool call is one undo step. Pass user " +
   "data via `args`, never by splicing it into code. If a call returns status 'running' with a commandId, use ae_get_result " +
@@ -1235,7 +1343,8 @@ export class McpServer {
 
 export async function main(env = process.env) {
   const config = loadConfig(env);
-  const bridge = new Bridge(config);
+  const launcher = env.AE_MCP_TEST_LAUNCHER ? (await import(pathToFileURL(path.resolve(env.AE_MCP_TEST_LAUNCHER)).href)).createLauncher(config) : null;
+  const bridge = new Bridge(config, launcher);
   await bridge.init();
   const warning = cloudSyncWarning(config.bridgeDir, env);
   if (warning) process.stderr.write(`ae-mcp: WARNING: ${warning}\n`);

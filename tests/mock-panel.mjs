@@ -1,4 +1,6 @@
-// Node imitation of ae-mcp-panel.jsx: same file protocol, scripted responses.
+// Node imitation of ae-mcp-runner.jsx: same file protocol, scripted responses.
+// Default: polls command.json (AE_MCP_TRANSPORT=files). triggered: runs once per "run" line that
+// tests/fake-launcher.mjs appends to triggers.txt, like the runner started by AfterFX.exe -s.
 // Lets the protocol be tested without After Effects.
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -11,7 +13,7 @@ export const TINY_PNG = Buffer.from(
 
 export class MockPanel {
   // handler(command) -> { data } | { error } , may be async; `delayMs` simulates a long command.
-  constructor(bridgeDir, { handler, pollMs = 20, projectPath = null, panelVersion = "0.2.0" } = {}) {
+  constructor(bridgeDir, { handler, pollMs = 20, projectPath = null, panelVersion = "0.3.0", triggered = false } = {}) {
     this.dir = bridgeDir;
     this.handler = handler ?? (() => ({ data: null }));
     this.pollMs = pollMs;
@@ -23,6 +25,14 @@ export class MockPanel {
     this.lastCommandId = "";
     this.busy = false;
     this.timer = null;
+    this.triggered = triggered;
+    this.runs = 0;
+  }
+
+  pendingRuns() {
+    let lines = [];
+    try { lines = fsSync.readFileSync(path.join(this.dir, "triggers.txt"), "utf8").split("\n").filter(l => l === "run"); } catch { /* none yet */ }
+    return lines.length - this.runs;
   }
 
   async start() {
@@ -47,14 +57,18 @@ export class MockPanel {
   }
 
   writeStatus() {
-    return this.writeAtomic(path.join(this.dir, "panel-status.json"), {
-      running: this.running, busy: this.busy, panelVersion: this.panelVersion,
+    return this.writeAtomic(path.join(this.dir, "runner-status.json"), {
+      running: this.running, busy: this.busy, runnerVersion: this.panelVersion,
       heartbeat: Date.now(), projectPath: this.projectPath, lastCommandId: this.lastCommandId
     });
   }
 
   async tick() {
     if (this.busy || !this.running) return;
+    if (this.triggered) {
+      if (this.pendingRuns() <= 0) return;
+      this.runs++;
+    }
     this.busy = true;
     try {
       await this.writeStatus();
@@ -74,7 +88,7 @@ export class MockPanel {
       }
       await this.writeAtomic(path.join(this.dir, "ack.json"), { commandId: command.commandId, tool: command.tool, startedAt });
       this.executed.push(command);
-      const envelope = { commandId: command.commandId, tool: command.tool, startedAt, panelVersion: this.panelVersion };
+      const envelope = { commandId: command.commandId, tool: command.tool, startedAt, runnerVersion: this.panelVersion };
       try {
         const outcome = (await this.handler(command, this)) ?? {};
         if (outcome.delayMs) await sleep(outcome.delayMs);

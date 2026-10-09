@@ -1,7 +1,7 @@
 # Installing AE MCP Bridge: instructions for an AI agent
 
-You are installing AE MCP Bridge for the user: an MCP server (Node.js, no dependencies) plus a panel inside
-Adobe After Effects. Work through the steps in order. Every step ends with a **Done when** check: run it and reach
+You are installing AE MCP Bridge for the user: an MCP server (Node.js, no dependencies) that runs
+scripts in the open Adobe After Effects; nothing has to be installed or started inside After Effects. Work through the steps in order. Every step ends with a **Done when** check: run it and reach
 it before moving on. Steps marked **HUMAN** are actions only the user can perform; ask for them in plain words,
 wait for the user's confirmation, then run the check yourself. Talk to the user in their language.
 
@@ -50,7 +50,9 @@ Scripting & Expressions*), enable **Allow Scripts to Write Files and Access Netw
 
 **Done when** the user confirms.
 
-## 5. Install the panel
+## 5. Optional: the status panel
+
+Skip this step unless the user wants to see a log of commands inside After Effects; the bridge works without it.
 
 ```bash
 node <bridge>/src/install-panel.mjs --link
@@ -61,13 +63,13 @@ Program Files triggers a Windows UAC prompt: tell the user beforehand that it wi
 confirm it (**HUMAN**). On macOS run it as `sudo "$(which node)" <bridge>/src/install-panel.mjs --link` (the full Node path keeps it
 working when Node comes from nvm or Homebrew; the user types the password, **HUMAN**).
 
-**Done when** the output ends with `done` for each After Effects version. If After Effects is not found, ask the user
-for its folder and pass `--ae "<folder>"`.
+**Done when** the output ends with `done` for each After Effects version (or the step was skipped). If After
+Effects is not found, ask the user for its folder and pass `--ae "<folder>"`.
 
-## 6. Start the bridge
+## 6. Check the bridge
 
-**HUMAN**: restart After Effects, open **Window > ae-mcp-panel.jsx**, dock the panel, click **Start bridge**, tick
-**Start automatically when this panel opens**.
+**HUMAN**: start After Effects (restart it if the panel was installed) and open a project. If an old 0.2 AE MCP panel
+is open, close it: it polls the bridge folder and can break scripting in After Effects when a dialog opens.
 
 Then verify the whole chain yourself:
 
@@ -75,8 +77,9 @@ Then verify the whole chain yourself:
 node <bridge>/scripts/check-install.mjs
 ```
 
-**Done when** it prints `RESULT: connected`. If it prints *never started in this bridge folder*, the panel is not
-running yet or uses another bridge folder: ask the user what the panel's status line says.
+**Done when** it prints `RESULT: connected`. If it says After Effects is not running, ask the user to start it; if a
+dialog is open, ask them to close it; if the command was not started, ask them to check **Allow Scripts to Write
+Files and Access Network** (step 4).
 
 ## 7. Connect the clients
 
@@ -113,7 +116,7 @@ zipped folder in **Settings > Capabilities > Skills** (**HUMAN**).
 
 Tell the user:
 
-- what was installed and where (`<bridge>`, the panel, the bridge folder `C:\MCP\ae-bridge`);
+- what was installed and where (`<bridge>`, the bridge folder `C:\MCP\ae-bridge`, the panel if installed);
 - which clients are configured and which restarts or approvals are still theirs;
 - the first request to try after restarting the client: *"Check the connection to After Effects. Don't change anything."*;
 - that every tool call is one Ctrl+Z, and the project is backed up to `C:\MCP\ae-bridge\backups` before the first change.

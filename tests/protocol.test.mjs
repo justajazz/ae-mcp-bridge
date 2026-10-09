@@ -20,6 +20,7 @@ async function setup({ env = {}, panelOptions, startPanel = true } = {}) {
     AE_MCP_TIMEOUT_MS: "1500",
     AE_MCP_PICKUP_TIMEOUT_MS: "600",
     AE_MCP_POLL_MS: "20",
+    AE_MCP_TRANSPORT: "files",
     ...env
   });
   await client.initialize();
@@ -129,7 +130,7 @@ describe("commands", () => {
     const started = Date.now();
     const result = await client.call("ae_run_jsx", { code: "x()" });
     assert.equal(result.isError, true);
-    assert.match(textOf(result), /never run in this bridge folder/);
+    assert.match(textOf(result), /No runner has ever answered/);
     assert.ok(Date.now() - started < 1400, "should fail at pickup timeout, not the full timeout");
     assert.equal(fsSync.existsSync(path.join(dir, "command.json")), false, "withdrawn command removed");
 
@@ -148,22 +149,22 @@ describe("commands", () => {
     await panel.stop();
     const result = await client.call("ae_list_project");
     assert.equal(result.isError, true);
-    assert.match(textOf(result), /panel is stopped/);
+    assert.match(textOf(result), /runner is stopped/);
   });
 
   test("ae_health reports server, panel and AE info", async () => {
-    await setup({ panelOptions: { handler: () => ({ data: { app: "After Effects", version: "26.3", panelVersion: "0.2.0" } }) } });
+    await setup({ panelOptions: { handler: () => ({ data: { app: "After Effects", version: "26.3", runnerVersion: "0.3.0" } }) } });
     const result = await client.call("ae_health");
     const report = JSON.parse(textOf(result));
     assert.equal(report.connected, true);
-    assert.equal(report.server.serverVersion, "0.2.0");
+    assert.equal(report.server.serverVersion, "0.3.0");
     assert.equal(report.server.bridgeDir, dir);
     assert.equal(report.ae.version, "26.3");
     assert.equal(report.warning, undefined);
   });
 
   test("ae_health flags panel/server version mismatch", async () => {
-    await setup({ panelOptions: { handler: () => ({ data: { panelVersion: "0.1.9" } }) } });
+    await setup({ panelOptions: { handler: () => ({ data: { runnerVersion: "0.1.9" } }) } });
     const report = JSON.parse(textOf(await client.call("ae_health")));
     assert.match(report.warning, /Version mismatch/);
   });

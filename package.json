@@ -1,6 +1,6 @@
 {
   "name": "ae-mcp-bridge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP bridge that lets Claude and Codex work inside Adobe After Effects",
   "type": "module",
   "private": true,

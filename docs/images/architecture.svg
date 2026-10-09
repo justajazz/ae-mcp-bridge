@@ -36,7 +36,7 @@
   <rect x="810" y="30" width="172" height="230" rx="12" fill="#1F1F3A" stroke="#9999FF" stroke-width="2"/>
   <text x="896" y="58" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">After Effects</text>
   <rect x="826" y="74" width="140" height="72" rx="8" fill="#2E2E58" stroke="#9999FF"/>
-  <text x="896" y="100" text-anchor="middle" font-size="12.5" fill="#ffffff" font-family="Consolas, monospace">ae-mcp-panel.jsx</text>
+  <text x="896" y="100" text-anchor="middle" font-size="12.5" fill="#ffffff" font-family="Consolas, monospace">ae-mcp-runner.jsx</text>
   <text x="896" y="122" text-anchor="middle" font-size="12.5" fill="#d6d6ff">runs the code,</text>
   <text x="896" y="138" text-anchor="middle" font-size="12.5" fill="#d6d6ff">one undo step</text>
   <rect x="826" y="176" width="140" height="66" rx="8" fill="#2E2E58" stroke="#9999FF"/>
@@ -58,6 +58,9 @@
   <text x="535" y="258" text-anchor="middle" font-size="12" fill="#888">files, unique id</text>
 
   <line x1="752" y1="110" x2="822" y2="110" stroke="#555" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
-  <text x="786" y="98" text-anchor="middle" font-size="12" fill="#555">polls</text>
-  <text x="786" y="130" text-anchor="middle" font-size="12" fill="#555">10× / s</text>
+  <text x="786" y="98" text-anchor="middle" font-size="12" fill="#555">command</text>
+  <text x="786" y="130" text-anchor="middle" font-size="12" fill="#555">result</text>
+  <!-- trigger: the server starts the runner in the running AE -->
+  <polyline points="470,58 470,42 806,42" fill="none" stroke="#9999FF" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a)"/>
+  <text x="640" y="34" text-anchor="middle" font-size="12" fill="#5a5ad6">starts AfterFX.exe -s per command</text>
 </svg>

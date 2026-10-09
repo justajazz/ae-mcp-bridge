@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Installs ae-mcp-panel.jsx into After Effects' "ScriptUI Panels" folder so it can be
+// Installs the optional status panel ae-mcp-panel.jsx into After Effects' "ScriptUI Panels" folder so it can be
 // docked via the Window menu. Zero dependencies.
 //
 //   node install-panel.mjs              copy the panel into every installed AE version
@@ -117,7 +117,7 @@ function main(argv) {
     else { console.error("  FAILED"); failures++; }
   }
   if (!uninstall && !failures) {
-    console.log("\nNext: restart After Effects, open Window > ae-mcp-panel.jsx, dock it and click Start bridge.");
+    console.log("\nNext: restart After Effects, open Window > ae-mcp-panel.jsx. The panel is optional: it only shows a log.");
     console.log("Make sure Preferences > Scripting & Expressions > Allow Scripts to Write Files and Access Network is on.");
   }
   return failures ? 1 : 0;

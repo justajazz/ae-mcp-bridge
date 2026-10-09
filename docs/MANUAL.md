@@ -19,8 +19,7 @@ Parameter reference for every tool: [TOOLS.md](TOOLS.md).
 
 If the files are already on your disk: *"Install AE MCP Bridge following C:\MCP\ae-mcp\docs\INSTALL-AGENT.md"*.
 The agent follows [INSTALL-AGENT.md](INSTALL-AGENT.md): it runs the commands, checks every step and asks you only
-for what it cannot do itself: confirm the Windows UAC prompt, tick one After Effects preference, start the panel,
-approve the server and restart your apps. About five minutes. The chat in Claude Desktop and Cowork cannot do this
+for what it cannot do itself: tick one After Effects preference, approve the server and restart your apps. About five minutes. The chat in Claude Desktop and Cowork cannot do this
 (they have no access to your system), but once installed they work with the bridge like any other client.
 
 **Install by hand.** Follow [section 3](#3-installation) and [section 4](#4-connecting-an-ai-client) below.
@@ -41,12 +40,18 @@ approve the server and restart your apps. About five minutes. The chat in Claude
 
 ## 1. How it works
 
-![How the bridge works: AI client, MCP server, bridge folder, panel inside After Effects](images/architecture.svg)
+![How the bridge works: AI client, MCP server, bridge folder, script inside After Effects](images/architecture.svg)
 
 - **`src/mcp-server.mjs`** is the MCP server. The AI client starts it with Node.js; it has no dependencies and needs
   no `npm install` or build step.
-- **`src/ae-mcp-panel.jsx`** is a small panel inside After Effects. While its bridge is running it checks the bridge
-  folder ten times a second, executes commands and writes the results back.
+- **`src/ae-mcp-runner.jsx`** executes commands inside After Effects. The server copies it into the bridge folder
+  and, for every command, starts it in the running After Effects (`AfterFX.exe -s` on Windows, AppleScript
+  `DoScriptFile` on macOS). It runs once, writes the result and ends: nothing keeps running in After Effects, so
+  nothing needs to be started there.
+- **Dialogs.** While a modal dialog is open in After Effects (Composition Settings, Preferences, an error message)
+  it refuses every script. The server sees that (on Windows: the main window of After Effects is disabled) and the
+  command waits until you close the dialog, up to a minute, instead of failing.
+- **`src/ae-mcp-panel.jsx`** is an optional panel that shows the commands as they run. The bridge works without it.
 - **The bridge folder** (`C:\MCP\ae-bridge` on Windows, `~/Library/Application Support/ae-mcp-bridge` on macOS) is
   where the two exchange files. It also holds temporary frames, logs, renders and project backups.
 - Every request is synchronous and has a unique id, so a slow command is never executed twice.
@@ -80,31 +85,10 @@ git clone https://github.com/justajazz/ae-mcp-bridge.git C:\MCP\ae-mcp
 After Effects: **Edit > Preferences > Scripting & Expressions** (macOS: *After Effects > Settings*), enable
 **Allow Scripts to Write Files and Access Network**, click OK.
 
-### 3.3 Install the panel
+That is all After Effects needs: since version 0.3.0 the bridge has no panel to install or start. Open your project
+and connect a client ([section 4](#4-connecting-an-ai-client)).
 
-Run the installer (After Effects may stay open; restart it afterwards):
-
-```bash
-node C:\MCP\ae-mcp\src\install-panel.mjs --link
-```
-
-- `--link` (recommended) installs a tiny loader into `ScriptUI Panels` that runs the panel from your bridge folder.
-  After an update of the bridge you only reopen the panel; nothing has to be reinstalled.
-- Without `--link` the full panel is copied. Use that if the bridge folder may move; rerun the installer after updates.
-- `--uninstall` removes it; `--ae "C:\Program Files\Adobe\Adobe After Effects 2026"` targets one version.
-- Writing into `Program Files` needs administrator rights: Windows shows a UAC prompt, confirm it. On macOS the
-  `Applications` folder needs `sudo`; pass the full Node path so it is found under sudo as well:
-  `sudo "$(which node)" ~/MCP/ae-mcp/src/install-panel.mjs --link`.
-
-Then **restart After Effects**, open **Window > ae-mcp-panel.jsx**, dock the panel where you like and click
-**Start bridge**. The status line shows `Running: C:/MCP/ae-bridge`.
-
-![The ae-mcp-panel docked in After Effects, bridge running, autostart enabled](images/panel.png)
-
-Tick **Start automatically when this panel opens**: the bridge then starts by itself whenever After Effects opens
-the panel (a docked panel reopens with your workspace).
-
-Check the whole chain without any AI client:
+Check the whole chain without any AI client (After Effects must be running):
 
 ```bash
 node C:\MCP\ae-mcp\scripts\check-install.mjs
@@ -112,8 +96,28 @@ node C:\MCP\ae-mcp\scripts\check-install.mjs
 
 It starts the server the way a client does, asks After Effects for its status and ends with `RESULT: connected`.
 
-> Without installing: **File > Scripts > Run Script File...** and choose `src/ae-mcp-panel.jsx` opens the same panel
-> as a floating window for one session (After Effects may ask for confirmation if *Warn User When Executing Files* is on).
+### 3.3 Optional: the status panel
+
+The panel shows a log of the commands the assistant runs (OK / FAIL, duration). It does not take part in the
+exchange, so you can close it at any time. Install it with (After Effects may stay open; restart it afterwards):
+
+```bash
+node C:\MCP\ae-mcp\src\install-panel.mjs --link
+```
+
+- `--link` (recommended) installs a tiny loader into `ScriptUI Panels` that runs the panel from the installation folder.
+  After an update of the bridge you only reopen the panel; nothing has to be reinstalled.
+- Without `--link` the full panel is copied. Use that if the bridge folder may move; rerun the installer after updates.
+- `--uninstall` removes it; `--ae "C:\Program Files\Adobe\Adobe After Effects 2026"` targets one version.
+- Writing into `Program Files` needs administrator rights: Windows shows a UAC prompt, confirm it. On macOS the
+  `Applications` folder needs `sudo`; pass the full Node path so it is found under sudo as well:
+  `sudo "$(which node)" ~/MCP/ae-mcp/src/install-panel.mjs --link`.
+
+Then restart After Effects and open **Window > ae-mcp-panel.jsx**. **Refresh** shows when the last command ran.
+
+> Updating from 0.2: the old panel polled the bridge folder and stopped working (sometimes taking all scripts in
+> After Effects down with it) as soon as a modal dialog opened. Reinstall or reopen the panel so the new one
+> replaces it; there is no **Start bridge** button any more.
 
 ## 4. Connecting an AI client
 
@@ -201,7 +205,7 @@ args = ["C:\\MCP\\ae-mcp\\src\\mcp-server.mjs"]
 - Codex asks permission to run tools; allowing them for the session saves time.
 
 **Already using "After Effects MCP by Ruslan Tsapenko"?** The two bridges can be installed side by side: they use
-different bridge folders and different panels, so neither sees the other's commands. Their tools, however, have the
+different bridge folders, so neither sees the other's commands. Their tools, however, have the
 same names (`ae_health`, `ae_run_jsx`, ...), which confuses the assistant. While you use this bridge, turn the
 original off in **Codex Settings > MCP** (its server is usually named `after_effects`; it stays configured and can be
 turned on again) and keep its panel stopped. That is also why this bridge is registered as `ae_mcp_bridge` in Codex.
@@ -219,7 +223,7 @@ Claude loads it automatically when a task involves After Effects. The motion rul
 
 ## 5. First steps
 
-With After Effects open and the panel showing **Running**:
+With After Effects open:
 
 1. *"Check the connection to After Effects through MCP. Don't change anything."*: the assistant calls `ae_health`
    and reports versions, the open project and the active composition.
@@ -277,7 +281,7 @@ Properties are addressed by paths through the layer's property tree:
 
 | Tool | What it does |
 |---|---|
-| `ae_health` | Versions, open project, active comp, panel state. |
+| `ae_health` | Versions, whether After Effects runs or shows a dialog, open project, active comp. |
 | `ae_guidelines` | Motion-design and workflow guide for the assistant. |
 | `ae_list_project` | Compositions with layers, plus folders, footage and solids. |
 | `ae_open_project` | Open another .aep (asks to save or discard unsaved changes). |
@@ -365,7 +369,10 @@ Environment variables of the **server** (set them in the client config: `env` in
 |---|---|---|
 | `AE_MCP_BRIDGE_DIR` | `C:\MCP\ae-bridge` / `~/Library/Application Support/ae-mcp-bridge` | Bridge folder. If you change it, set the same variable for After Effects too (see below). |
 | `AE_MCP_TIMEOUT_MS` | `30000` | How long a tool waits before returning a `commandId` (renders and frames wait longer). |
-| `AE_MCP_PICKUP_TIMEOUT_MS` | `10000` | How long to wait for the panel to pick a command up before reporting it is not running. |
+| `AE_MCP_PICKUP_TIMEOUT_MS` | `10000` | How long to wait for After Effects to start a command before reporting it did not. |
+| `AE_MCP_DIALOG_WAIT_MS` | `60000` | How long a command waits for you to close a modal dialog in After Effects. |
+| `AE_MCP_RETRIGGER_MS` | `4000` | Re-send the start signal if After Effects has not started the command after this long. |
+| `AE_MCP_AFTERFX` | found automatically | Full path to `AfterFX.exe` (macOS: the After Effects `.app`), if detection fails. |
 | `AE_MCP_DISABLE_RUN_JSX` | off | `1` disables `ae_run_jsx` and `ae_run_jsx_file`. |
 | `AE_MCP_BACKUP` | on | `0` disables project backups. |
 | `AE_MCP_BACKUP_KEEP` | `5` | Backups kept per project. |
@@ -373,8 +380,9 @@ Environment variables of the **server** (set them in the client config: `env` in
 | `AE_MCP_LOG` | on | `0` disables the script log. |
 | `AE_MCP_LOG_DAYS` | `30` | Days to keep logs. |
 
-The panel reads `AE_MCP_BRIDGE_DIR` from the environment of After Effects. On Windows set it as a user variable
-(`setx AE_MCP_BRIDGE_DIR "D:\my-bridge"`), then restart After Effects and the AI client. Keep the bridge folder out
+The runner finds the bridge folder by itself (it runs from there). Only the optional panel reads
+`AE_MCP_BRIDGE_DIR` from the environment of After Effects: set it as a user variable
+(`setx AE_MCP_BRIDGE_DIR "D:\my-bridge"`) and restart After Effects if you moved the folder and use the panel. Keep the bridge folder out
 of cloud-synced folders: sync clients lock files, and the server warns about it.
 
 Example `.mcp.json` entry with options:
@@ -393,36 +401,41 @@ Example `.mcp.json` entry with options:
 
 ## 10. Troubleshooting
 
-Start with `node C:\MCP\ae-mcp\scripts\check-install.mjs`: it tests the server and the panel without any client and
+Start with `node C:\MCP\ae-mcp\scripts\check-install.mjs`: it tests the server and After Effects without any client and
 tells you which side is missing.
 
 | Symptom | What to do |
 |---|---|
-| *"bridge panel has never run in this bridge folder"* | Open **Window > ae-mcp-panel.jsx** and click **Start bridge**. If it runs, the panel and the server use different bridge folders: compare the path in the panel with `ae_health`. |
-| *"panel is stopped"* | Click **Start bridge** (or enable autostart). |
-| *"did not pick up the command"* | After Effects is busy (rendering, a modal dialog is open) or the panel was closed. Close dialogs, check the panel. Nothing was executed. |
+| *"After Effects is not running"* | Start After Effects and open the project. The bridge never starts After Effects by itself. |
+| *"A dialog is open in After Effects"* | Close the dialog named in the message (Composition Settings, Preferences, an error). The command waited for it and was not executed; ask again. |
+| *"did not start the command"* | After Effects is busy (rendering, loading a project) or scripts are blocked: enable **Allow Scripts to Write Files and Access Network**. Nothing was executed. `<bridge>/logs/runner-*.log` lists runner errors. |
+| AE shows *"Cannot run a script while a modal dialog is waiting for response"* | A dialog opened in the same second a command was sent. Click OK and close the dialog: the server sends the command again, and it runs once. |
 | A tool returns `status: running` | The command is still running in AE. Ask the assistant to wait for it (`ae_get_result`); do not repeat the request. |
 | *"After Effects is still executing ..."* | A previous long command is running; wait for it. |
 | *Undo group mismatch* dialog in AE | Click OK. It appears when a project is opened or closed inside a script; use `ae_open_project` instead. |
 | *Unable to write file* / nothing happens | Enable **Allow Scripts to Write Files and Access Network** in AE preferences. |
-| The panel is not in the **Window** menu | Restart After Effects after installing; check that the installer wrote to the right AE version. |
-| *Version mismatch* warning in `ae_health` | Reopen the panel (with `--link`) or rerun the installer. |
+| The optional panel is not in the **Window** menu | Restart After Effects after installing; check that the installer wrote to the right AE version. |
+| *Version mismatch* warning in `ae_health` | Restart the AI client: the server reinstalls `<bridge>/runner.jsx` when it starts. |
 | The client does not list the tools | Check the command and the path to `mcp-server.mjs`; use the full path to `node`; restart the client completely; in Claude Code check `/mcp`. |
 | Cloud-sync warning | Move the bridge folder out of OneDrive / Google Drive / Dropbox / iCloud. |
 | Text looks wrong in the frame | Fonts are referenced by PostScript name (e.g. `Arial-BoldMT`); a missing font falls back silently. |
 
 ## 11. For developers
 
-- `npm test`: protocol, serializer, PNG/WAV and documentation tests against a Node mock of the panel (no AE needed).
-- Every tool was also verified against a real After Effects 2026 with a dedicated test project.
+- `npm test`: protocol, serializer, PNG/WAV and documentation tests against a Node mock of the runner and a fake After Effects launcher (no AE needed).
+- `npm run test:live`: the same checks against a real After Effects 2026 with a dedicated test project; `--dialog`
+  adds the modal-dialog scenario (open and close Composition Settings when asked).
 - `node scripts/gen-tools-doc.mjs` regenerates [TOOLS.md](TOOLS.md) after changing tool definitions.
 - `scripts/check-install.mjs` and `scripts/configure-client.mjs` are the installation helpers used by
   [INSTALL-AGENT.md](INSTALL-AGENT.md).
 - Architecture: tools are ES3 JSX templates in `src/jsx.mjs` with a shared one-line `lib` prepended; user data goes
   in `args`. Media processing (PNG compositing, contact sheets, WAV analysis, preset search) is in `src/media.mjs`.
-  The panel (`src/ae-mcp-panel.jsx`) only evaluates code, manages undo groups and serializes results safely.
+  The runner (`src/ae-mcp-runner.jsx`) only evaluates code, manages undo groups and serializes results safely;
+  `src/ae-launch.mjs` starts it in After Effects and `src/win-probe.ps1` detects modal dialogs on Windows.
+  Nothing in After Effects uses `app.scheduleTask`: in After Effects 2026 a scheduled task that meets a modal dialog
+  leaves the scripting engine refusing every script until After Effects is restarted.
 - ExtendScript is ES3: no `let`/`const`, arrow functions, template literals, `Array.forEach/map/indexOf`;
-  `tests/panel.test.mjs` lints every template.
+  `tests/panel.test.mjs` lints the runner, the panel and every template.
 
 ## Credits
 

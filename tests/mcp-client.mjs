@@ -31,7 +31,7 @@ export class McpClient {
     this.child.stderr.on("data", chunk => { this.stderr += chunk; });
   }
 
-  request(method, params, timeoutMs = 20000) {
+  request(method, params, timeoutMs = 90000) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`No reply to ${method} in ${timeoutMs} ms. stderr: ${this.stderr}`)), timeoutMs);

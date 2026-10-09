@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.3.0 (2026-10-09)
+
+### Changed: no polling panel
+
+In After Effects 2026 (verified on 26.3, Windows 10) any pending `app.scheduleTask`, one-shot or repeating, dies as
+soon as a native modal dialog opens (Composition Settings, Preferences, an error message) and leaves the whole
+ExtendScript engine refusing every script ("Cannot run a script while a modal dialog is waiting for response")
+until After Effects is restarted. The 0.2 panel polled the bridge folder that way, so a single dialog could take
+the bridge, and all scripts in After Effects, down.
+
+- The bridge no longer needs a panel. For every command the server writes `command.json` as before and then
+  starts `<bridge>/runner.jsx` in the running After Effects with `AfterFX.exe -s "$.evalFile(...)"`
+  (about one second, no "Warn User When Executing Files" prompt). The runner executes the command once, writes the
+  result and ends; nothing runs in After Effects between commands. macOS uses AppleScript `DoScriptFile` (untested).
+- The server copies the runner into the bridge folder at start, so its version always matches the server.
+- Modal dialogs: on Windows the server checks whether the main window of After Effects is disabled before sending a
+  command; while a dialog is open the command waits (`AE_MCP_DIALOG_WAIT_MS`, 60 s) and fails with a clear
+  "A dialog is open ..." message only if it is never closed. If a dialog opens in the same second and swallows the
+  start signal, the command is sent again (`AE_MCP_RETRIGGER_MS`); the runner executes each command id once.
+- Clear errors when After Effects is not running (the bridge never starts it) or when it does not start a command.
+  `AE_MCP_AFTERFX` overrides the detected `AfterFX.exe`.
+- `ae_health` reports whether After Effects runs and whether a dialog is open (with its title) without sending
+  anything while one is open; the runner version replaces the panel version.
+- The panel (`ae-mcp-panel.jsx`) is optional and only shows a log of the commands; it never polls or schedules tasks.
+  The runner writes errors to `<bridge>/logs/runner-YYYY-MM-DD.log`.
+- `AE_MCP_TRANSPORT=files` keeps the plain file protocol without starting After Effects (tests, custom runners).
+- Tests: transport tests with a fake After Effects launcher (dialog wait, swallowed trigger, AE not running); the
+  live suite runs without a panel and `--dialog` adds the modal-dialog scenario.
+
+Interim fixes for the 0.2 polling panel (stall recovery with "Stop bridge", adaptive poll interval, panel trace log,
+"Object is invalid" on reopening) are superseded by this change.
+
 ## 0.2.0 (2026-10-07)
 
 Compared with "After Effects MCP by Ruslan Tsapenko" 0.1.0.

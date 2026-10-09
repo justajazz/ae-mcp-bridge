@@ -2,7 +2,7 @@
 //
 // Every template runs inside After Effects with:
 //   args - data from the tool call (never spliced into the code)
-//   mcp  - panel helpers (findComp, findLayer, layerType, projectInfo, ensureFolder, ...)
+//   mcp  - runner helpers (findComp, findLayer, layerType, projectInfo, ensureFolder, ...)
 //   lib  - the helper library below, prepended to each template
 // ES3 only: no let/const, arrow functions, template literals, Array.forEach/map/indexOf.
 // tests/panel.test.mjs lints every string in this file.
@@ -347,7 +347,7 @@ export const LIB = LIB_SOURCE.replace(/\s*\n\s*/g, " ");
 export const JSX = {
   health: String.raw`(function () {
     var info = { app: app.name, version: app.version, build: app.buildName, os: $.os,
-        panelVersion: mcp.version, bridgeDir: mcp.bridgeDir, project: mcp.projectInfo(), activeComp: null };
+        runnerVersion: mcp.version, bridgeDir: mcp.bridgeDir, project: mcp.projectInfo(), activeComp: null };
     var item = app.project ? app.project.activeItem : null;
     if (item instanceof CompItem) info.activeComp = { id: item.id, name: item.name, time: item.time, numLayers: item.numLayers };
     return info;
